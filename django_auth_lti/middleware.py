@@ -20,6 +20,7 @@ class LTIAuthMiddleware(object):
 
     If the request is not an LTI launch request, do nothing.
     """
+    context_id_key = 'resource_link_id'
 
     def process_request(self, request):
         logger.debug('inside process_request %s' % request.path)
@@ -101,29 +102,37 @@ class LTIAuthMiddleware(object):
                         custom_roles = request.POST.get(settings.LTI_CUSTOM_ROLE_KEY, '').split(',')
                         lti_launch['roles'] += filter(None, custom_roles)  # Filter out any empty roles
 
-                    params_in_session = request.session.get('LTI_LAUNCH', {})
-                    params_in_session[resource_link_id] = lti_launch
-                    request.session['LTI_LAUNCH'] = params_in_session
+                    if 'LTI_LAUNCH' not in request.session:
+                        request.session['LTI_LAUNCH'] = {}
+                    request.session['LTI_LAUNCH'][self.context_id_key] = lti_launch
                 else:
                     logger.error('LTI launch request did not contain a resource_link_id parameter.')
 
             else:
                 # User could not be authenticated!
                 logger.warning('user could not be authenticated via LTI params; let the request continue in case another auth plugin is configured')
+        request.lti_context_id = self.get_lti_context_id_from_request(request)
+        logger.debug("found context in request with value %s" % request.lti_context_id)
+        if request.lti_context_id:
+            request.lti_launch_params = self.get_lti_launch_params_dict(request).get(request.lti_context_id, {})
 
-        request.lti_launch_params = self.get_lti_params(request)
-
-    def get_lti_params(self, request):
-        context_id = request.REQUEST.get('resource_link_id', None)
+    def get_lti_context_id_from_request(self, request):
+        context_id = request.GET.get(self.context_id_key, None)
         if not context_id:
-            raise ImproperlyConfigured("No LTI resource link was found in request!")
+            try:
+                context_id = request.POST[self.context_id_key]
+            except KeyError:
+                logger.debug("No LTI resource link was found in request!")
+                return None
+        return context_id
 
-        lti_launch = request.session.get('LTI_LAUNCH', None)
-        if not isinstance(lti_launch, dict):
+    def get_lti_launch_params_dict(self, request):
+        lti_launch_dict = request.session.get('LTI_LAUNCH', None)
+        if not isinstance(lti_launch_dict, dict):
             # If this is raised, then likely the project doesn't have
             # the correct settings or is being run outside of an lti context
             raise ImproperlyConfigured("No LTI_LAUNCH value found in session")
-        return lti_launch.get(context_id, {})
+        return lti_launch_dict
 
     def clean_username(self, username, request):
         """
