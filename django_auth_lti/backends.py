@@ -2,16 +2,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.core.exceptions import PermissionDenied
 
-from ims_lti_py.tool_provider import DjangoToolProvider
 from time import time
 import logging
 
 logger = logging.getLogger(__name__)
-
-from django.conf import settings
-
-# get credentials from config
-oauth_creds = settings.LTI_OAUTH_CREDENTIALS
 
 
 class LTIAuthBackend(ModelBackend):
@@ -28,24 +22,9 @@ class LTIAuthBackend(ModelBackend):
     # Username prefix for users without an sis source id
     unknown_user_prefix = "cuid:"
 
-    def authenticate(self, request):
+    def authenticate(self, request, tool_provider):
 
         logger.info("about to begin authentication process")
-
-        request_key = request.POST.get('oauth_consumer_key', None)
-
-        if request_key is None:
-            logger.error("Request doesn't contain an oauth_consumer_key; can't continue.")
-            return None
-
-        secret = oauth_creds.get(request_key, None)
-
-        if secret is None:
-            logger.error("Could not get a secret for key %s" % request_key)
-            raise PermissionDenied
-
-        logger.debug('using key/secret %s/%s' % (request_key, secret))
-        tool_provider = DjangoToolProvider(request_key, secret, request.POST.dict())
 
         postparams = request.POST.dict()
 
