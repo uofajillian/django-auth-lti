@@ -9,11 +9,11 @@ def is_allowed(request, allowed_roles, raise_exception):
     else:
         allowed = allowed_roles
     
-    if not hasattr(request, 'lti_launch'):
+    if not hasattr(request, 'lti_params'):
         # If this is raised, then likely the project doesn't have
         # the correct settings or is being run outside of an lti context
         raise ImproperlyConfigured("Request does not contain an lti launch context")
-    user_roles = request.lti_launch.get('roles', [])
+    user_roles = request.lti_params.get('roles', [])
     is_user_allowed = set(allowed) & set(user_roles)
     
     if not is_user_allowed and raise_exception:

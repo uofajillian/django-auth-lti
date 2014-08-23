@@ -25,9 +25,7 @@ class LTIAuthMiddleware(object):
     """
 
     def __init__(self):
-        self.context_key = settings.LTI_CONTEXT_KEY
         # get credentials from config
-        logger.debug("inside middleware init!")
         self.oauth_creds = settings.LTI_OAUTH_CREDENTIALS
 
     def process_request(self, request):
@@ -82,27 +80,10 @@ class LTIAuthMiddleware(object):
                 if hasattr(settings, 'LTI_CUSTOM_ROLE_KEY'):
                     lti_launch['roles'] += tool_provider.get_custom_param(settings.LTI_CUSTOM_ROLE_KEY).split(',')
                 
-                request.lti_launch = self.add_launch_params_to_session(lti_launch, request.session)
+                request.lti_params = lti_launch
             else:
                 # User could not be authenticated!
                 logger.warning('user could not be authenticated via LTI params; let the request continue in case another auth plugin is configured')
-
-    def process_view(self, request, view_func, view_args, view_kwargs):
-        logger.debug("inside process_view!")
-        logger.debug("view_kwargs contains %s" % view_kwargs)
-        if self.context_key in view_kwargs:
-            context = view_kwargs[self.context_key]
-        else:
-            # If not part of url string then check if query parameter
-            context = request.GET.get(self.context_key, None)
-
-        if context:
-            # Match up context key in session with key in url
-            if context in request.session.get('LTI_LAUNCH', {}):
-                request.lti_launch = request.session['LTI_LAUNCH'].get(context)
-            else:  # Looks like someone's working in another context
-                logger.error("User context %s for key %s not present in session" % (context, self.context_key))
-                raise PermissionDenied("Bogus context specified!")
  
     def clean_username(self, username, request):
         """
@@ -118,6 +99,51 @@ class LTIAuthMiddleware(object):
         except AttributeError:  # Backend has no clean_username method.
             pass
         return username
+
+
+class LTIContextMiddleware(object):
+
+    def process_request(self, request):
+        logger.debug("inside LTIContextMiddleware process_request!")
+        if not hasattr(request, 'lti_params') and 'LTI_LAUNCH' in request.session:
+            logger.debug("setting lti_params from session!")
+            request.lti_params = request.session['LTI_LAUNCH']
+
+    def process_response(self, request, response):
+        if hasattr(request, 'lti_params'):
+            logger.debug("storing lti_params in session!")
+            request.session['LTI_LAUNCH'] = request.lti_params
+        return response
+
+
+class LTIMultipleContextMiddleware(object):
+
+    def __init__(self):
+        self.context_key = settings.LTI_CONTEXT_KEY
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        logger.debug("inside multiple context process_view!")
+        logger.debug("view_kwargs contains %s" % view_kwargs)
+        if self.context_key in view_kwargs:
+            context = view_kwargs[self.context_key]
+        else:
+            # If not part of url string then check if query parameter
+            context = request.GET.get(self.context_key, None)
+
+        if context:
+            # Match up context key in session with key in url
+            if context in request.session.get('LTI_LAUNCH', {}):
+                logger.debug("setting launch params based on context of %s" % context)
+                request.lti_params = request.session['LTI_LAUNCH'].get(context)
+            else:  # Looks like someone's working in another context
+                logger.error("User context %s for key %s not present in session" % (context, self.context_key))
+                raise PermissionDenied("Bogus context specified!")
+
+    def process_response(self, request, response):
+        if hasattr(request, 'lti_params'):
+            logger.debug("storing lti_params in session based on context!")
+            self.add_launch_params_to_session(request.lti_params, request.session)
+        return response
 
     def add_launch_params_to_session(self, params, session):
         # Determine key value based on context
