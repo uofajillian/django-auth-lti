@@ -1,7 +1,6 @@
 from django.core.urlresolvers import reverse_lazy
 from django.core.exceptions import ImproperlyConfigured
 from django.shortcuts import redirect
-from braces.views import LoginRequiredMixin
 from django_auth_lti.verification import is_allowed
 
 
@@ -30,8 +29,11 @@ class LTIRoleRestrictionMixin(LTIUtilityMixin):
         return redirect(self.redirect_url)
 
 
+'''
+from braces.views import LoginRequiredMixin
 class LTIRoleRequiredMixin(LoginRequiredMixin, LTIRoleRestrictionMixin):
     """
     Mixin is a shortcut to use both LoginRequiredMixin and LTIRoleRestrictionMixin
     """
     pass
+'''
