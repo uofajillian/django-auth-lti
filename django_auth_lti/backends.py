@@ -121,10 +121,8 @@ class LTIAuthBackend(ModelBackend):
         # update the user
         if email:
             user.email = email
-        # FIXME ADX-192: should really be using our own nickname field, instead
-        # of requiring first_name to be unique.
-        #if first_name:
-        #    user.first_name = first_name
+        if first_name:
+            user.first_name = first_name
         if last_name:
             user.last_name = last_name
         user.save()
